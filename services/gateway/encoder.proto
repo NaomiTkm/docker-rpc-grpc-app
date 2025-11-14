@@ -1,0 +1,9 @@
+syntax = "proto3";
+package encoder;
+
+service Encoder {
+  rpc Encode(EncodeRequest) returns (EncodeReply) {}
+}
+
+message EncodeRequest { string text = 1; }
+message EncodeReply { string encoded = 1; }

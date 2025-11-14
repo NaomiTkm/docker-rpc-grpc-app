@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>RPC vs gRPC — Base64 Encode/Decode Benchmark</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#f4f6f9; --card:#fff; --muted:#687385; --text:#121826; --primary:#0b5fff; --primary-600:#0a54e3;
+      --border:#e5e8ee; --success:#0b8a4a; --danger:#c21d3a; --warn:#b97300; --chip:#eef2f7;
+      --shadow:0 4px 16px rgba(0,0,0,.06); --radius:14px; --gap:14px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    .topbar{background:#0e1320;color:#e9edf4;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #0b1020}
+    .brand{font-weight:700;letter-spacing:.2px}.brand small{opacity:.7;font-weight:500;margin-left:8px}
+    .wrap{max-width:1050px;margin:24px auto;padding:0 20px}
+    .muted{color:var(--muted)} .row{display:flex;gap:var(--gap);flex-wrap:wrap;align-items:flex-end}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+    .controls{display:grid;grid-template-columns:repeat(5,minmax(160px,1fr));gap:var(--gap)}
+    label{font-size:.88rem;color:#3a4556;display:block;margin:0 0 6px}
+    input,select,textarea,button{font:inherit;width:100%;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);padding:10px 12px;transition:border .15s,box-shadow .15s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(11,95,255,.12)}
+    input[type="number"]{max-width:160px} textarea{min-height:120px;resize:vertical}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--primary);border:1px solid var(--primary);color:#fff;cursor:pointer;padding:10px 14px;border-radius:10px;font-weight:600;transition:background .15s,transform .05s}
+    .btn:hover{background:var(--primary-600)} .btn:active{transform:translateY(1px)} .btn:disabled{opacity:.6;cursor:not-allowed}
+    .btn.ghost{background:#fff;color:var(--primary);border-color:var(--primary)}
+    .hint{margin-top:8px;font-size:.9rem}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:var(--chip);border:1px solid var(--border);color:#3a4556;font-size:.8rem;font-weight:600}
+    .results-grid{display:grid;gap:var(--gap);grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+    .stat{border:1px solid var(--border);border-radius:12px;padding:14px;background:#fff}
+    .stat h4{margin:0 0 6px;font-size:.95rem;color:#2e3748}.stat .num{font-size:1.2rem;font-weight:700}
+    .ok{color:var(--success)} .err{color:var(--danger)} .warn{color:var(--warn)}
+    code{word-break:break-all}.footer-note{margin-top:8px;font-size:.88rem;color:var(--muted)} .spacer{height:6px}
+    .progress{display:none;align-items:center;gap:8px;color:var(--muted);font-size:.9rem}
+    .spinner{width:14px;height:14px;border-radius:50%;border:2px solid #d3d8e3;border-top-color:var(--primary);animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media (max-width:900px){.controls{grid-template-columns:repeat(2,minmax(160px,1fr))}}
+    .compare-grid{display:grid;gap:var(--gap);grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+    .metric-row{display:grid;grid-template-columns:1.2fr .8fr .8fr;gap:10px;padding:8px 0;border-bottom:1px dashed var(--border);align-items:center}
+    .metric-row strong{font-weight:600}
+    .badge-fast{background:#e9f7ef;color:#16794a;border:1px solid #bfe8cf;border-radius:999px;padding:2px 8px;font-size:.75rem;margin-left:8px}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">RPC vs gRPC Benchmark <small>Base64 Encode / Decode</small></div>
+    <div class="muted">Dockerized Client</div>
+  </header>
+
+  <main class="wrap">
+    <section class="card" style="margin-bottom:16px;">
+      <div class="row" style="align-items:stretch;">
+        <div style="flex:1;">
+          <p class="muted" style="margin:0 0 10px;">
+            Compare latency between JSON/HTTP (RPC) and HTTP/2 + Protobuf (gRPC). Run single operations or multi-iteration benchmarks and view per-op metrics and total duration.
+          </p>
+
+          <div class="controls">
+            <div>
+              <label for="protocol">Protocol</label>
+              <select id="protocol">
+                <option value="rpc">RPC (HTTP/JSON)</option>
+                <option value="grpc">gRPC (protobuf)</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="op">Operation</label>
+              <select id="op">
+                <option value="encode">Encode → Base64</option>
+                <option value="decode">Decode ← Base64</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="mode">Mode</label>
+              <select id="mode">
+                <option value="encode">Simple Run (1x)</option>
+                <option value="bench">Benchmark (N runs)</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="iterations">Iterations (1–10000)</label>
+              <input id="iterations" type="number" min="1" max="10000" value="25" />
+            </div>
+
+            <div style="display:flex; align-items:flex-end; gap:10px;">
+              <button id="run" class="btn" style="flex:1;">
+                <span id="runLabel">Run</span>
+                <span class="spinner" id="spin" style="display:none;"></span>
+              </button>
+              <button id="compare" class="btn ghost" style="flex:1;">Compare Both</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div>
+        <label for="text" id="textLabel">Your text (UTF-8)</label>
+        <textarea id="text">Hello, welcome to encoding and decoding service!</textarea>
+        <div class="hint muted" id="hint">Encode = send plain text and receive Base64.</div>
+      </div>
+
+      <div class="progress" id="progress">
+        <div class="spinner"></div>
+        <div>Running… this may take a moment for large iteration counts.</div>
+      </div>
+    </section>
+
+    <section id="out" class="card" style="display:none;"></section>
+  </main>
+
+  <script>
+    /* ----------------- CONFIG ----------------- */
+    const API_BASE = "";         // stays blank; Nginx proxies /api/* → gateway
+    const API_BENCH = `${API_BASE}/api/bench`;
+
+    const $ = (id) => document.getElementById(id);
+    const out = $("out");
+    const progress = $("progress");
+    const spin = $("spin");
+    const runBtn = $("run");
+    const runLabel = $("runLabel");
+    const compareBtn = $("compare");
+
+    function setDecodeModeUI() {
+      const isDecode = $("op").value === "decode";
+      $("textLabel").textContent = isDecode ? "Base64 input" : "Your text (UTF-8)";
+      $("hint").textContent = isDecode
+        ? "Decode = send Base64 and receive the original text."
+        : "Encode = send plain text and receive Base64.";
+      $("text").placeholder = isDecode
+        ? "Paste Base64 here (will be decoded)"
+        : "Type text here (will be encoded)";
+    }
+    function setIterationsEnabled() {
+      const bench = $("mode").value === "bench";
+      $("iterations").disabled = !bench;
+    }
+    $("op").addEventListener("change", setDecodeModeUI);
+    $("mode").addEventListener("change", setIterationsEnabled);
+    setDecodeModeUI();
+    setIterationsEnabled();
+
+    function setRunning(state) {
+      runBtn.disabled = state; compareBtn.disabled = state;
+      progress.style.display = state ? "flex" : "none";
+      spin.style.display = state ? "inline-block" : "none";
+      runLabel.textContent = state ? "Running…" : "Run";
+    }
+
+    async function callBench(protocol, op, text, iterations) {
+      const body = { protocol, op, text, iterations };
+      const t0 = performance.now();
+      const r = await fetch(API_BENCH, {
+        method: "POST", headers: { "Content-Type":"application/json" },
+        body: JSON.stringify(body)
+      });
+      const t1 = performance.now();
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || r.statusText);
+      return { data, browserPerOpMs: (t1 - t0) / (data.iterations ?? iterations) };
+    }
+
+    function fmtNsToMs(n){ return (typeof n === "number" ? (n/1e6).toFixed(3) : "–"); }
+    function fmtTotalMs(ms){ return ms >= 1000 ? (ms/1000).toFixed(2) + " s" : ms.toFixed(2) + " ms"; }
+
+    function renderSingle(protocol, op, mode, result, browserPerOpMs) {
+      const isDecode = (op === "decode");
+      const key = isDecode ? "decoded" : "encoded";
+      const label = isDecode ? "Decoded (UTF-8):" : "Encoded (Base64):";
+      const it = result.iterations ?? 1;
+
+      const totalMs =
+        typeof result.totalMs === "number" ? result.totalMs :
+        (typeof result.totalNs === "number" ? result.totalNs / 1e6 :
+         (browserPerOpMs * it));
+
+      let html = `
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div class="pill">${protocol.toUpperCase()} • ${op.toUpperCase()} • ${it} ${it===1?"iteration":"iterations"}</div>
+        </div>
+
+        <div class="stat" style="margin-bottom:12px;">
+          <h4>${label}</h4>
+          <div><code>${String(result[key] ?? "").replace(/</g,"&lt;")}</code></div>
+        </div>
+
+        <div class="results-grid">
+          <div class="stat">
+            <h4>Server time / op</h4>
+            <div class="num ok">${fmtNsToMs(result.serverNsPerOp)} ms</div>
+            <div class="muted">Transport + serialization + service compute</div>
+          </div>
+          <div class="stat">
+            <h4>Round-trip / op</h4>
+            <div class="num">${fmtNsToMs(result.roundTripNsPerOp)} ms</div>
+            <div class="muted">Loop overhead + async costs included</div>
+          </div>
+          <div class="stat">
+            <h4>Browser time / op</h4>
+            <div class="num">${browserPerOpMs.toFixed(3)} ms</div>
+            <div class="muted">Fetch + DOM update (client side)</div>
+          </div>
+        </div>
+
+        <div class="stat" style="margin-top:12px;">
+          <h4>Total ${it===1?"time":"benchmark time"}</h4>
+          <div class="num">${fmtTotalMs(totalMs)}</div>
+          <div class="muted">Aggregate time for ${it.toLocaleString()} ${it===1?"operation":"iterations"}</div>
+        </div>
+      `;
+
+      if (mode === "bench") {
+        html += `<div class="footer-note">Tip: increase iterations for steadier results. Base64 work is cheap; protocol overhead dominates.</div>`;
+      }
+      return html;
+    }
+
+    function renderCompare(op, mode, rpc, grpc) {
+      const it = rpc.data.iterations;
+      const rows = [
+        ["Server time / op",  Number(rpc.data.serverNsPerOp)/1e6,  Number(grpc.data.serverNsPerOp)/1e6, "ms/op"],
+        ["Round-trip / op",   Number(rpc.data.roundTripNsPerOp)/1e6,Number(grpc.data.roundTripNsPerOp)/1e6,"ms/op"],
+        ["Browser time / op", rpc.browserPerOpMs,                    grpc.browserPerOpMs,                 "ms/op"],
+        ["Total benchmark",   rpc.data.totalMs ?? rpc.data.totalNs/1e6, grpc.data.totalMs ?? grpc.data.totalNs/1e6, "ms total"]
+      ];
+
+      const faster = (a,b)=>a<b?` <span class="badge-fast">faster</span>`:"";
+
+      return `
+        <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div class="pill">COMPARE • ${op.toUpperCase()} • ${it} ${it===1?"iteration":"iterations"} • Same input</div>
+        </div>
+
+        <div class="compare-grid">
+          <div class="stat">
+            <h4>RPC Result</h4>
+            <div><code>${String((op==="decode"?rpc.data.decoded:rpc.data.encoded) ?? "").replace(/</g,"&lt;")}</code></div>
+          </div>
+          <div class="stat">
+            <h4>gRPC Result</h4>
+            <div><code>${String((op==="decode"?grpc.data.decoded:grpc.data.encoded) ?? "").replace(/</g,"&lt;")}</code></div>
+          </div>
+        </div>
+
+        <div class="stat" style="margin-top:12px;">
+          <h4>Performance comparison</h4>
+          <div class="metric-row" style="font-weight:600;">
+            <div></div><div>RPC</div><div>gRPC</div>
+          </div>
+
+          ${rows.map(([name, r, g, unit])=>{
+            const rStr = isFinite(r)?r.toFixed(3):"–";
+            const gStr = isFinite(g)?g.toFixed(3):"–";
+            const rBadge = isFinite(r)&&isFinite(g)?faster(r,g):"";
+            const gBadge = isFinite(r)&&isFinite(g)?faster(g,r):"";
+            const suffix = name==="Total benchmark" && (r>=1000||g>=1000) ? " (ms)" : ` ${unit}`;
+            return `
+              <div class="metric-row">
+                <div><strong>${name}</strong><span class="muted">${suffix}</span></div>
+                <div>${rStr}${rBadge}</div>
+                <div>${gStr}${gBadge}</div>
+              </div>`;}).join("")}
+
+          <div class="muted" style="margin-top:8px;">“Faster” badge marks the lower value.</div>
+        </div>
+      `;
+    }
+
+    $("run").addEventListener("click", async () => {
+      out.style.display="none"; out.innerHTML="";
+      const protocol=$("protocol").value, op=$("op").value, mode=$("mode").value;
+      const text=$("text").value;
+      const iterations = mode==="bench" ? Math.max(1,Math.min(10000,Number($("iterations").value||1))) : 1;
+      if (!text.trim()) { out.innerHTML=`<div class="stat" style="border-left:4px solid var(--danger);"><h4 class="err">Error</h4><div>Input is empty.</div></div>`; out.style.display="block"; return; }
+
+      setRunning(true);
+      try {
+        const { data, browserPerOpMs } = await callBench(protocol, op, text, iterations);
+        out.innerHTML = renderSingle(protocol, op, mode, data, browserPerOpMs);
+        out.style.display="block";
+      } catch(e) {
+        out.innerHTML = `<div class="stat" style="border-left:4px solid var(--danger);"><h4 class="err">Error</h4><div>${String(e.message||e)}</div></div>`;
+        out.style.display="block";
+      } finally { setRunning(false); }
+    });
+
+    $("compare").addEventListener("click", async () => {
+      out.style.display="none"; out.innerHTML="";
+      const op=$("op").value, mode=$("mode").value, text=$("text").value;
+      const iterations = mode==="bench" ? Math.max(1,Math.min(10000,Number($("iterations").value||1))) : 1;
+      if (!text.trim()) { out.innerHTML=`<div class="stat" style="border-left:4px solid var(--danger);"><h4 class="err">Error</h4><div>Input is empty.</div></div>`; out.style.display="block"; return; }
+
+      setRunning(true);
+      try {
+        const rpc = await callBench("rpc", op, text, iterations);
+        const grpc = await callBench("grpc", op, text, iterations);
+        out.innerHTML = renderCompare(op, mode, rpc, grpc);
+        out.style.display="block";
+      } catch(e) {
+        out.innerHTML = `<div class="stat" style="border-left:4px solid var(--danger);"><h4 class="err">Error</h4><div>${String(e.message||e)}</div></div>`;
+        out.style.display="block";
+      } finally { setRunning(false); }
+    });
+  </script>
+</body>
+</html>

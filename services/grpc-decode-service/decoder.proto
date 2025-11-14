@@ -1,0 +1,9 @@
+syntax = "proto3";
+package decoder;
+
+service Decoder {
+  rpc Decode(DecodeRequest) returns (DecodeReply) {}
+}
+
+message DecodeRequest { string data = 1; }   // Base64 string
+message DecodeReply { string decoded = 1; }  // UTF-8 text
