@@ -63,6 +63,9 @@ To verify whether the status of the docker containers:
 ## Step 3
 Open a browser, visit: http://localhost:8088/
 
+## Example
+<img width="1852" height="653" alt="image" src="https://github.com/user-attachments/assets/a23061ce-c269-47d7-9f6c-3a9a1def559c" />
+
 
 # Other Notes by Developer
 ```
