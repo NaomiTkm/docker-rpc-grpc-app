@@ -1,0 +1,62 @@
+# docker-compose.yml
+services:
+  rpc-encode:
+    build:
+      context: ./services/rpc-service
+    image: naomitkm/rpc-encode:latest-v1.1
+    # container_name: rpc-encode-1   # (optional; better to omit for portability)
+    ports: ["3001:3001"]
+    restart: unless-stopped
+
+  rpc-decode:
+    build:
+      context: ./services/rpc-decode-service
+    image: naomitkm/rpc-decode:latest-v1.1
+    # container_name: rpc-decode-1
+    ports: ["3002:3002"]
+    restart: unless-stopped
+
+  grpc-encode:
+    build:
+      context: ./services/grpc-service
+    image: naomitkm/grpc-encode:latest-v1.1
+    # container_name: grpc-encode-1
+    ports: ["50051:50051"]
+    restart: unless-stopped
+
+  grpc-decode:
+    build:
+      context: ./services/grpc-decode-service
+    image: naomitkm/grpc-decode:latest-v1.1
+    # container_name: grpc-decode-1
+    ports: ["50052:50052"]
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    image: naomitkm/gateway:latest-v1.1
+    # container_name: gateway
+    environment:
+      RPC_URL:          http://rpc-encode:3001/encode
+      RPC_DECODE_URL:   http://rpc-decode:3002/decode
+      GRPC_ADDR:        grpc-encode:50051
+      GRPC_DECODE_ADDR: grpc-decode:50052
+      PORT: "8080"
+    depends_on:
+      - rpc-encode
+      - rpc-decode
+      - grpc-encode
+      - grpc-decode
+    ports: ["8080:8080"]   # expose for direct testing in browser
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    image: naomitkm/frontend:latest-v1.1
+    # container_name: frontend
+    depends_on:
+      - gateway
+    ports: ["8088:80"]     # open http://localhost:8088
+    restart: unless-stopped
