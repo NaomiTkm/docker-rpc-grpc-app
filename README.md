@@ -54,6 +54,7 @@ services:
 ## Step 2
 In your terminal, run:
 > docker compose pull
+
 > docker compose up -d
 
 To verify whether the status of the docker containers:
