@@ -1,6 +1,6 @@
 # docker-compose.yml for distribution
 ## Step 1
-For users, create a docker-compose.yml file in your environment, copy and paste the following code in the yaml file that you have created
+For users, create a *docker-compose.yml* file in your environment, copy and paste the following code in the yaml file that you have created
 ```
 services:
   rpc-encode:
